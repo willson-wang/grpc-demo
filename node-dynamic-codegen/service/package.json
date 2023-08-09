@@ -1,0 +1,13 @@
+{
+  "name": "service",
+  "version": "1.0.0",
+  "main": "index.js",
+  "license": "MIT",
+  "scripts": {
+    "run": "node app.js"
+  },
+  "dependencies": {
+    "@grpc/proto-loader": "^0.7.4",
+    "grpc": "^1.24.11"
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "name": "service",
+  "version": "1.0.0",
+  "main": "index.js",
+  "license": "MIT",
+  "scripts": {
+    "run": "node app.js",
+    "run1": "GRPC_VERBOSITY=DEBUG GRPC_TRACE=tcp node app.js",
+    "code-gen": "grpc_tools_node_protoc --js_out=import_style=commonjs,binary:./ --grpc_out=grpc:./ --proto_path=../../protos helloworld.proto"
+  },
+  "dependencies": {
+    "google-protobuf": "^3.21.2",
+    "grpc": "^1.24.11",
+    "grpc-tools": "^1.12.4"
+  }
+}

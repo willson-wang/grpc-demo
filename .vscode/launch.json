@@ -1,0 +1,24 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name":"Launch",
+            "type":"node",
+            "request": "launch",
+            "program": "${workspaceFolder}/node-static-codegen/client/app.js", // => 这里指向node编译后的debug文件
+            "args": [],
+            // "cwd": "${workspaceFolder}/node-static-codegen/client",
+            "env":{
+                "GRPC_VERBOSITY": "DEBUG",
+                "GPRC_TRACE": "all",
+            },
+            "console": "externalTerminal"
+        },
+        {
+            "name": "Attach C/C++ Addon",
+            "type": "lldb",
+            "request": "attach",
+            "pid":"${command:pickMyProcess}",
+        }
+    ]
+}
