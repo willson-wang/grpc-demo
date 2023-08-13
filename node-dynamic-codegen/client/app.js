@@ -135,12 +135,27 @@ function checkReloadError(message) {
     return reloadError.find(item => item.reg.test(message))
   }
 
-var client = new hello_proto.Greeter(target, grpc.credentials.createInsecure(), {
-    interceptors: [logInterceptor]
-});
+let count = 0;
+
+function getGrpcClient() {
+      // { 'grpc.keepalive_timeout_ms': 10000, 'grpc.keepalive_time_ms': 30000 }
+    const client = new hello_proto.Greeter(target, grpc.credentials.createInsecure(), {
+        interceptors: [logInterceptor]
+    });
+    client.id = (++count);
+    return client;
+}
+
+var client = getGrpcClient();
+
 
 function grpcReady(traceId) {
     let timer;
+    if (!client) {
+        console.log('### 重新获取grpc client');
+        // 连接失败之后，需要重新new clint进行rpc连接，才能够正常连接
+        client = getGrpcClient();
+    }
     return Promise.race([
         new Promise((resolve, reject) => {
             console.info('###: 初始化go-server-test的Greeter RPC服务...', traceId);
@@ -175,7 +190,7 @@ function grpcReady(traceId) {
 const methods = Object.keys(hello_proto.Greeter.prototype).filter((key) => typeof hello_proto.Greeter.prototype[key] === 'function')
 console.log('methods', methods);
 methods.forEach((key) => {
-    let originCall = process.env.apmEnable ? require('./apm').addTraceIdToMetadataToSyncError(hello_proto.Greeter.prototype[key].bind(client)) : hello_proto.Greeter.prototype[key].bind(client);
+    let originCall = process.env.apmEnable ? require('./apm').addTraceIdToMetadataToSyncError(hello_proto.Greeter.prototype[key]) : hello_proto.Greeter.prototype[key];
     hello_proto.Greeter.prototype[key] = function (...args) {
         return new Promise((resolve, reject) => {
             try {
@@ -202,14 +217,29 @@ methods.forEach((key) => {
     let originCall = hello_proto.Greeter.prototype[key];
     hello_proto.Greeter.prototype[key] = async function (...args) {
         try {
-            const result = await originCall(...args);
+            const result = await Promise.race([
+                originCall(...args).finally(() => {
+                    clearTimeout(timer)
+                }),
+                new Promise((resolve) => {
+                    let traceIdWrap = process.env.apmEnable ? require('./apm').traceIdWrap : () => (()=> {});
+                    timer = setTimeout(traceIdWrap((traceId) => {
+                        console.log('grpc error(race)', traceId, 'rpc调用触发超时错误'); 
+                        resolve(new Error('rpc调用触发自定义超时错误'))
+                    }), 5000)
+                })
+            ]);
+            if (result instanceof Error) {
+                throw result
+            }
             return result
         } catch (error) {
             const message = (error.details || error.message || error.error || '').toLowerCase();
             if (checkReloadError(message)) {
                 const traceId = error?.metadata?.get('trace-id')[0] || error.traceId;
                 console.log('### 触发rpc重连', traceId);
-                // client.close();
+                client.close();
+                client = null;
                 await grpcReady(traceId).catch((err) => {
                     console.log('grpcReady error', err);
                 })

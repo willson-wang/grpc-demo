@@ -18,8 +18,9 @@ var hello_proto = grpc.loadPackageDefinition(packageDefinition).helloworld;
 function sayHello(call, callback) {
   console.log('metadata', call.metadata);
   const metadata = new grpc.Metadata();
-  console.log(call.metadata.get('trace-id'))
-  metadata.add('trace-id', call.metadata.get('trace-id'));
+  // console.log(call.metadata.get('trace-id'))
+  // metadata.add('trace-id', call.metadata.get('trace-id'));
+  metadata.add('trace-id', call.metadata.get('trace-id')[0]);
   metadata.add('elastic-apm-traceparent', call.metadata.get('elastic-apm-traceparent')[0]);
   metadata.add('random', `${Math.random()}`);
   call.sendMetadata(metadata)

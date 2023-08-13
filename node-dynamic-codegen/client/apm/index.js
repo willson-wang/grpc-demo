@@ -54,7 +54,7 @@ function addTraceIdToMetadataToSyncError(fn) {
         const currentTransaction = apm.currentTransaction;
         try {
             console.log('grpc begin', currentTransaction.traceId); 
-            fn(...args)
+            fn.apply(this, args)
         } catch (error) {
             error.traceId = currentTransaction.traceId
             throw error
@@ -62,6 +62,14 @@ function addTraceIdToMetadataToSyncError(fn) {
     }
 }
 
+function traceIdWrap(fn) {
+    return function () {
+        const currentTransaction = apm.currentTransaction;
+        fn(currentTransaction.traceId)
+    }
+}
+
 module.exports = apm
 module.exports.addTraceIdToMetadata = addTraceIdToMetadata;
 module.exports.addTraceIdToMetadataToSyncError = addTraceIdToMetadataToSyncError;
+module.exports.traceIdWrap = traceIdWrap;
