@@ -4,7 +4,7 @@
   "main": "index.js",
   "license": "MIT",
   "scripts": {
-    "run1": "GRPC_VERBOSITY=DEBUG GPRC_TRACE=all node app.js",
+    "run1": "GRPC_VERBOSITY=DEBUG GRPC_TRACE=tcp node app.js",
     "run": "apmEnable=true node app.js"
   },
   "dependencies": {

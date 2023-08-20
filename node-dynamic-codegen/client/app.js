@@ -1,8 +1,26 @@
 var PROTO_PATH = __dirname + '/../../protos/helloworld.proto';
 
+process.env.GRPC_TRACE = 'list_tracers'
+process.env.GRPC_VERBOSITY = 'DEBUG'
+
 var parseArgs = require('minimist');
 var grpc = require('grpc');
 var protoLoader = require('@grpc/proto-loader');
+
+// grpc.setLogVerbosity(0)
+
+
+grpc.setLogger({
+    error(...args) {
+        console.log('info1 ***', ...args);
+    },
+    log() {
+        console.log('log ***', ...args);
+    },
+    info() {
+        console.info('info ***', ...args);
+    }
+})
 
 var packageDefinition = protoLoader.loadSync(
     PROTO_PATH,
@@ -14,6 +32,22 @@ var packageDefinition = protoLoader.loadSync(
     });
 
 var hello_proto = grpc.loadPackageDefinition(packageDefinition).helloworld;
+
+
+const ECHO_PROTO_PATH = __dirname + '/../../protos/echo.proto';
+
+const echoPackageDefinition = protoLoader.loadSync(
+    ECHO_PROTO_PATH,
+  {keepCase: true,
+   longs: String,
+   enums: String,
+   defaults: true,
+   oneofs: true
+  });
+
+const echoProto = grpc.loadPackageDefinition(echoPackageDefinition).grpc.examples.echo;
+
+
 
 
 const Koa = require('koa')
@@ -82,7 +116,7 @@ const logInterceptor =  (options, nextCall) => {
             onReceiveStatus(status, next) {
                 // 如果grpc发生错误，则使用elasticoption获取传入的trace-id
                 if (status.code) {
-                    status.metadata.add('trace-id', elasticoption.traceId)
+                    elasticoption?.traceId && status.metadata.add('trace-id', elasticoption?.traceId)
                 }
                 next(status)
             }
@@ -137,17 +171,33 @@ function checkReloadError(message) {
 
 let count = 0;
 
+
 function getGrpcClient() {
       // { 'grpc.keepalive_timeout_ms': 10000, 'grpc.keepalive_time_ms': 30000 }
     const client = new hello_proto.Greeter(target, grpc.credentials.createInsecure(), {
-        interceptors: [logInterceptor]
+        interceptors: [logInterceptor],
+        'grpc.use_local_subchannel_pool': 1
     });
     client.id = (++count);
     return client;
 }
 
+function getEchoGrpcClient() {
+      // { 'grpc.keepalive_timeout_ms': 10000, 'grpc.keepalive_time_ms': 30000 }
+    const echoClient = new echoProto.Echo('localhost:50052', grpc.credentials.createInsecure(), {
+        // 'grpc.use_local_subchannel_pool': 1
+    });
+    return echoClient;
+}
+
 var client = getGrpcClient();
 
+console.log(grpc.connectivityState.READY, grpc.connectivityState.IDLE, grpc.connectivityState.CONNECTING, grpc.connectivityState.TRANSIENT_FAILURE, grpc.connectivityState.FATAL_FAILURE);
+
+// setInterval(() => {
+//     const state = client.getChannel().getConnectivityState(true);
+//     console.log('state', state);
+// }, 1000 * 20)
 
 function grpcReady(traceId) {
     let timer;
@@ -289,6 +339,28 @@ function getWorldPromise() {
     return client.sayHello({name: user}, { deadline: Date.now() + 10000 })
 }
 
+let echoClient = getEchoGrpcClient()
+function getEchoPromise() {
+    return new Promise((resolve, reject) => {
+        const deadline = new Date();
+        deadline.setSeconds(deadline.getSeconds() + 1);
+        if (!echoClient) {
+            console.log('初始化新客户端');
+            echoClient = getEchoGrpcClient() 
+        }
+        
+        echoClient.unaryEcho({message: 'world'}, {deadline}, (error, value) => {
+          if (error) {
+            reject(error)
+          }
+          resolve(value);
+          console.log('关闭客户端');
+          echoClient.close()
+          echoClient = null;
+        });
+      });
+}
+
 async function hellworld(ctx, next) {
     const result = await getWorld()
     ctx.status = 200
@@ -307,8 +379,22 @@ async function helleGrpc(ctx, next) {
     
 }
 
+async function helleEcho(ctx, next) {
+    try {
+        const result = await getEchoPromise()
+        ctx.body = result
+    } catch (error) {
+        ctx.body = error.message
+    }
+    ctx.status = 200
+    ctx.type = 'json'
+    
+}
+
+
 router.get('/hello/world', hellworld)
 router.get('/hello/grpc', helleGrpc)
+router.get('/hello/echo', helleEcho)
 
 app.use(router.routes());
 
@@ -319,6 +405,7 @@ app.listen({
   host: '0.0.0.0'
 }, () => {
   console.log('afterStart 000', new Date(), `http://localhost:${port}`);
+
 });
 
 
